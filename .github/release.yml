@@ -1,0 +1,25 @@
+# Configures GitHub's auto-generated release notes (used by the `release` job in
+# build-and-push.yml, which sets `generate_release_notes: true`).
+# Categorisation is label-driven: PRs are grouped by the labels listed below, and
+# anything without a matching label falls into "Other Changes" via the "*" catch-all.
+# https://docs.github.com/en/repositories/releasing-projects-on-github/automatically-generated-release-notes
+changelog:
+  exclude:
+    labels:
+      - stale
+      - duplicate
+      - invalid
+      - wontfix
+  categories:
+    - title: 🚀 Features & Enhancements
+      labels:
+        - enhancement
+    - title: 🐛 Bug Fixes
+      labels:
+        - bug
+    - title: 📝 Documentation
+      labels:
+        - documentation
+    - title: Other Changes
+      labels:
+        - "*"
