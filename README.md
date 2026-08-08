@@ -1,5 +1,15 @@
 # Frigate Plate Recognizer
 
+<p align="center">
+<img src="https://img.shields.io/github/stars/ljmerza/frigate_plate_recognizer?style=for-the-badge&label=Stars&color=orange" alt="Stars">
+<a href="https://github.com/ljmerza/frigate_plate_recognizer/releases/latest"><img src="https://img.shields.io/github/v/release/ljmerza/frigate_plate_recognizer?style=for-the-badge&color=purple" alt="Version"></a>
+<a href="https://github.com/ljmerza/frigate_plate_recognizer/actions/workflows/build-and-push.yml"><img src="https://img.shields.io/github/actions/workflow/status/ljmerza/frigate_plate_recognizer/build-and-push.yml?style=for-the-badge&label=Build" alt="Build"></a>
+</p>
+
+<p align="center">
+<a href="https://www.buymeacoffee.com/JMISm06AD"><img src="https://img.shields.io/badge/Buy%20Me%20A%20Coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me A Coffee"></a>
+</p>
+
 Identify license plates via [Plate Recognizer](https://guides.platerecognizer.com/) or [CodeProject.AI](https://www.codeproject.com/) and add them as sublabels to [blakeblackshear/frigate](https://github.com/blakeblackshear/frigate)
 
 ### Setup
@@ -207,9 +217,3 @@ mqtt:
     json_attributes_topic: "frigate/plate_recognizer"
     icon: mdi:car
 ```
-
----
-
-Enjoy my work? Help me out for a couple of :beers: or a :coffee:!
-
-<a href="https://www.buymeacoffee.com/JMISm06AD"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="41" width="174"></a>
