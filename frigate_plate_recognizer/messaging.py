@@ -79,6 +79,7 @@ def publish_plate_message(
     watched_plate: Optional[str],
     fuzzy_score: Optional[float],
     logger,
+    image_path: Optional[str] = None,
 ) -> None:
     if not config["frigate"].get("return_topic"):
         return
@@ -95,6 +96,7 @@ def publish_plate_message(
             "fuzzy_score": fuzzy_score,
             "original_plate": str(plate_number).upper(),
             "is_watched_plate": True,
+            "image_path": image_path,
         }
     else:
         message = {
@@ -104,6 +106,7 @@ def publish_plate_message(
             "camera_name": after_data["camera"],
             "start_time": formatted_start_time,
             "is_watched_plate": False,
+            "image_path": image_path,
         }
 
     logger.debug("Sending MQTT message: %s", message)

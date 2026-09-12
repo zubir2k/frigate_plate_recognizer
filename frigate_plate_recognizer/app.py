@@ -47,6 +47,7 @@ from frigate_plate_recognizer.http_client import build_session
 from frigate_plate_recognizer.images import (
     fetch_final_attributes,
     fetch_snapshot,
+    save_cropped_snapshot,
 )
 from frigate_plate_recognizer.images import (
     save_image as save_snapshot_image,
@@ -363,7 +364,7 @@ def is_duplicate_event(frigate_event_id):
     )
 
 
-def get_plate(snapshot):
+def get_plate(snapshot, camera_name: Optional[str] = None, frigate_event_id: Optional[str] = None):
     cfg = require_config()
     app_cfg = require_app_config()
     logger = require_logger()
@@ -374,6 +375,8 @@ def get_plate(snapshot):
         logger=logger,
         plate_session=get_plate_recognizer_session() if cfg.get("plate_recognizer") else None,
         code_project_session=get_code_project_session() if cfg.get("code_project") else None,
+        camera_name=camera_name,
+        frigate_event_id=frigate_event_id,
     )
 
 
@@ -487,9 +490,20 @@ def _process_message_inner(message) -> str:
     if snapshot_frame_time is not None:
         _set_last_snapshot_frame_time(frigate_event_id, snapshot_frame_time)
 
-    plate_number, plate_score, watched_plate, fuzzy_score = get_plate(snapshot)
+    camera_name = after_data.get("camera")
+    plate_number, plate_score, watched_plate, fuzzy_score = get_plate(snapshot, camera_name=camera_name, frigate_event_id=frigate_event_id)
     result = "no_plate"
     saved_plate_number = watched_plate if watched_plate else plate_number
+
+    # Save the cropped snapshot so HA can display it via image_path
+    image_path: Optional[str] = save_cropped_snapshot(
+        snapshot,
+        camera_name=camera_name or "unknown",
+        frigate_event_id=frigate_event_id,
+        snapshot_path=SNAPSHOT_PATH,
+        datetime_format=DATETIME_FORMAT,
+        logger=logger,
+    )
 
     if plate_number:
         start_time = datetime.fromtimestamp(after_data["start_time"])
@@ -520,6 +534,7 @@ def _process_message_inner(message) -> str:
             watched_plate=watched_plate,
             fuzzy_score=fuzzy_score,
             logger=logger,
+            image_path=image_path,
         )
 
     if saved_plate_number or cfg["frigate"].get("always_save_snapshot", False):

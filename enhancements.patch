@@ -1,0 +1,177 @@
+diff -ruN '--exclude=*.egg-info' '--exclude=*.lock' '--exclude=*.xml' frigate_plate_recognizer/frigate_plate_recognizer/app.py frigate_plate_recognizer_patched/frigate_plate_recognizer/app.py
+--- frigate_plate_recognizer/frigate_plate_recognizer/app.py	2026-09-12 05:49:06.829847579 +0000
++++ frigate_plate_recognizer_patched/frigate_plate_recognizer/app.py	2026-09-12 05:53:05.512002380 +0000
+@@ -47,6 +47,7 @@
+ from frigate_plate_recognizer.images import (
+     fetch_final_attributes,
+     fetch_snapshot,
++    save_cropped_snapshot,
+ )
+ from frigate_plate_recognizer.images import (
+     save_image as save_snapshot_image,
+@@ -363,7 +364,7 @@
+     )
+ 
+ 
+-def get_plate(snapshot):
++def get_plate(snapshot, camera_name: Optional[str] = None, frigate_event_id: Optional[str] = None):
+     cfg = require_config()
+     app_cfg = require_app_config()
+     logger = require_logger()
+@@ -374,6 +375,8 @@
+         logger=logger,
+         plate_session=get_plate_recognizer_session() if cfg.get("plate_recognizer") else None,
+         code_project_session=get_code_project_session() if cfg.get("code_project") else None,
++        camera_name=camera_name,
++        frigate_event_id=frigate_event_id,
+     )
+ 
+ 
+@@ -487,10 +490,21 @@
+     if snapshot_frame_time is not None:
+         _set_last_snapshot_frame_time(frigate_event_id, snapshot_frame_time)
+ 
+-    plate_number, plate_score, watched_plate, fuzzy_score = get_plate(snapshot)
++    camera_name = after_data.get("camera")
++    plate_number, plate_score, watched_plate, fuzzy_score = get_plate(snapshot, camera_name=camera_name, frigate_event_id=frigate_event_id)
+     result = "no_plate"
+     saved_plate_number = watched_plate if watched_plate else plate_number
+ 
++    # Save the cropped snapshot so HA can display it via image_path
++    image_path: Optional[str] = save_cropped_snapshot(
++        snapshot,
++        camera_name=camera_name or "unknown",
++        frigate_event_id=frigate_event_id,
++        snapshot_path=SNAPSHOT_PATH,
++        datetime_format=DATETIME_FORMAT,
++        logger=logger,
++    )
++
+     if plate_number:
+         start_time = datetime.fromtimestamp(after_data["start_time"])
+         formatted_start_time = start_time.strftime("%Y-%m-%d %H:%M:%S")
+@@ -520,6 +534,7 @@
+             watched_plate=watched_plate,
+             fuzzy_score=fuzzy_score,
+             logger=logger,
++            image_path=image_path,
+         )
+ 
+     if saved_plate_number or cfg["frigate"].get("always_save_snapshot", False):
+diff -ruN '--exclude=*.egg-info' '--exclude=*.lock' '--exclude=*.xml' frigate_plate_recognizer/frigate_plate_recognizer/images.py frigate_plate_recognizer_patched/frigate_plate_recognizer/images.py
+--- frigate_plate_recognizer/frigate_plate_recognizer/images.py	2026-09-12 05:49:06.829847579 +0000
++++ frigate_plate_recognizer_patched/frigate_plate_recognizer/images.py	2026-09-12 05:50:00.076854912 +0000
+@@ -81,6 +81,34 @@
+     return [attribute for attribute in attributes if attribute.get("label") == "license_plate"]
+ 
+ 
++def save_cropped_snapshot(
++    snapshot: bytes,
++    *,
++    camera_name: str,
++    frigate_event_id: str,
++    snapshot_path: str,
++    datetime_format: str,
++    logger,
++) -> Optional[str]:
++    """Persist the already-fetched cropped snapshot to disk.
++
++    Returns the absolute path of the saved file, or None on failure.
++    The file is saved as a JPEG to keep it small and HA-friendly.
++    """
++    try:
++        os.makedirs(snapshot_path, exist_ok=True)
++        timestamp = datetime.now().strftime(datetime_format)
++        filename = f"cropped_{camera_name}_{frigate_event_id}_{timestamp}.jpg"
++        image_path = os.path.join(snapshot_path, filename)
++        image = Image.open(io.BytesIO(bytearray(snapshot)))
++        image.save(image_path, format="JPEG", quality=95)
++        logger.debug("Saved cropped snapshot: %s", image_path)
++        return image_path
++    except Exception as exc:
++        logger.error("Failed to save cropped snapshot: %s", exc)
++        return None
++
++
+ def save_image(
+     *,
+     config: Dict[str, Any],
+@@ -166,4 +194,4 @@
+     image.save(image_path)
+ 
+ 
+-__all__ = ["fetch_snapshot", "fetch_final_attributes", "save_image"]
++__all__ = ["fetch_snapshot", "fetch_final_attributes", "save_image", "save_cropped_snapshot"]
+diff -ruN '--exclude=*.egg-info' '--exclude=*.lock' '--exclude=*.xml' frigate_plate_recognizer/frigate_plate_recognizer/messaging.py frigate_plate_recognizer_patched/frigate_plate_recognizer/messaging.py
+--- frigate_plate_recognizer/frigate_plate_recognizer/messaging.py	2026-09-12 05:49:06.829847579 +0000
++++ frigate_plate_recognizer_patched/frigate_plate_recognizer/messaging.py	2026-09-12 05:50:10.849129213 +0000
+@@ -79,6 +79,7 @@
+     watched_plate: Optional[str],
+     fuzzy_score: Optional[float],
+     logger,
++    image_path: Optional[str] = None,
+ ) -> None:
+     if not config["frigate"].get("return_topic"):
+         return
+@@ -95,6 +96,7 @@
+             "fuzzy_score": fuzzy_score,
+             "original_plate": str(plate_number).upper(),
+             "is_watched_plate": True,
++            "image_path": image_path,
+         }
+     else:
+         message = {
+@@ -104,6 +106,7 @@
+             "camera_name": after_data["camera"],
+             "start_time": formatted_start_time,
+             "is_watched_plate": False,
++            "image_path": image_path,
+         }
+ 
+     logger.debug("Sending MQTT message: %s", message)
+diff -ruN '--exclude=*.egg-info' '--exclude=*.lock' '--exclude=*.xml' frigate_plate_recognizer/frigate_plate_recognizer/pipeline.py frigate_plate_recognizer_patched/frigate_plate_recognizer/pipeline.py
+--- frigate_plate_recognizer/frigate_plate_recognizer/pipeline.py	2026-09-12 05:49:06.829847579 +0000
++++ frigate_plate_recognizer_patched/frigate_plate_recognizer/pipeline.py	2026-09-12 05:52:55.373630551 +0000
+@@ -17,6 +17,8 @@
+     logger,
+     plate_session,
+     code_project_session,
++    camera_name: Optional[str] = None,
++    frigate_event_id: Optional[str] = None,
+ ) -> RecognitionOutcome:
+     plate_number: Optional[str] = None
+     plate_score: Optional[float] = None
+@@ -33,6 +35,8 @@
+             app_config,
+             plate_session,
+             logger,
++            camera_name=camera_name,
++            frigate_event_id=frigate_event_id,
+         )
+     elif config.get("code_project"):
+         if code_project_session is None:
+diff -ruN '--exclude=*.egg-info' '--exclude=*.lock' '--exclude=*.xml' frigate_plate_recognizer/frigate_plate_recognizer/recognition.py frigate_plate_recognizer_patched/frigate_plate_recognizer/recognition.py
+--- frigate_plate_recognizer/frigate_plate_recognizer/recognition.py	2026-09-12 05:49:06.829847579 +0000
++++ frigate_plate_recognizer_patched/frigate_plate_recognizer/recognition.py	2026-09-12 05:52:47.788110304 +0000
+@@ -154,6 +154,8 @@
+     app_config,
+     session: Session,
+     logger,
++    camera_name: Optional[str] = None,
++    frigate_event_id: Optional[str] = None,
+ ) -> RecognitionResult:
+     plate_recognizer_counter.inc()
+ 
+@@ -164,7 +166,11 @@
+ 
+     api_url = recognizer_config.api_url or PLATE_RECOGNIZER_BASE_URL
+     headers = {"Authorization": f"Token {recognizer_config.token}"}
+-    data = dict(regions=recognizer_config.regions)
++    data: Dict[str, Any] = dict(regions=recognizer_config.regions)
++    if camera_name or frigate_event_id:
++        camera_id = f"{camera_name} ({frigate_event_id})" if camera_name and frigate_event_id else (camera_name or frigate_event_id)
++        data["camera_id"] = camera_id
++        logger.debug("Sending camera_id to Plate Recognizer: %s", camera_id)
+ 
+     attempts = max(1, recognizer_config.max_retries + 1)
+     delay_seconds = 1

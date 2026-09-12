@@ -81,6 +81,34 @@ def fetch_final_attributes(
     return [attribute for attribute in attributes if attribute.get("label") == "license_plate"]
 
 
+def save_cropped_snapshot(
+    snapshot: bytes,
+    *,
+    camera_name: str,
+    frigate_event_id: str,
+    snapshot_path: str,
+    datetime_format: str,
+    logger,
+) -> Optional[str]:
+    """Persist the already-fetched cropped snapshot to disk.
+
+    Returns the absolute path of the saved file, or None on failure.
+    The file is saved as a JPEG to keep it small and HA-friendly.
+    """
+    try:
+        os.makedirs(snapshot_path, exist_ok=True)
+        timestamp = datetime.now().strftime(datetime_format)
+        filename = f"cropped_{camera_name}_{frigate_event_id}_{timestamp}.jpg"
+        image_path = os.path.join(snapshot_path, filename)
+        image = Image.open(io.BytesIO(bytearray(snapshot)))
+        image.save(image_path, format="JPEG", quality=95)
+        logger.debug("Saved cropped snapshot: %s", image_path)
+        return image_path
+    except Exception as exc:
+        logger.error("Failed to save cropped snapshot: %s", exc)
+        return None
+
+
 def save_image(
     *,
     config: Dict[str, Any],
@@ -166,4 +194,4 @@ def save_image(
     image.save(image_path)
 
 
-__all__ = ["fetch_snapshot", "fetch_final_attributes", "save_image"]
+__all__ = ["fetch_snapshot", "fetch_final_attributes", "save_image", "save_cropped_snapshot"]

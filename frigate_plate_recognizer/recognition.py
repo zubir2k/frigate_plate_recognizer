@@ -154,6 +154,8 @@ def recognize_with_plate_recognizer(
     app_config,
     session: Session,
     logger,
+    camera_name: Optional[str] = None,
+    frigate_event_id: Optional[str] = None,
 ) -> RecognitionResult:
     plate_recognizer_counter.inc()
 
@@ -164,7 +166,11 @@ def recognize_with_plate_recognizer(
 
     api_url = recognizer_config.api_url or PLATE_RECOGNIZER_BASE_URL
     headers = {"Authorization": f"Token {recognizer_config.token}"}
-    data = dict(regions=recognizer_config.regions)
+    data: Dict[str, Any] = dict(regions=recognizer_config.regions)
+    if camera_name or frigate_event_id:
+        camera_id = f"{camera_name} ({frigate_event_id})" if camera_name and frigate_event_id else (camera_name or frigate_event_id)
+        data["camera_id"] = camera_id
+        logger.debug("Sending camera_id to Plate Recognizer: %s", camera_id)
 
     attempts = max(1, recognizer_config.max_retries + 1)
     delay_seconds = 1

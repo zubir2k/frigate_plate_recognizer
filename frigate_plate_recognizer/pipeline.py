@@ -17,6 +17,8 @@ def get_plate(
     logger,
     plate_session,
     code_project_session,
+    camera_name: Optional[str] = None,
+    frigate_event_id: Optional[str] = None,
 ) -> RecognitionOutcome:
     plate_number: Optional[str] = None
     plate_score: Optional[float] = None
@@ -33,6 +35,8 @@ def get_plate(
             app_config,
             plate_session,
             logger,
+            camera_name=camera_name,
+            frigate_event_id=frigate_event_id,
         )
     elif config.get("code_project"):
         if code_project_session is None:
