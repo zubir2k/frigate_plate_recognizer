@@ -166,7 +166,12 @@ def recognize_with_plate_recognizer(
 
     api_url = recognizer_config.api_url or PLATE_RECOGNIZER_BASE_URL
     headers = {"Authorization": f"Token {recognizer_config.token}"}
-    data: Dict[str, Any] = dict(regions=recognizer_config.regions)
+
+    # Build form data — regions must be sent as repeated keys for multipart
+    data: Dict[str, Any] = {}
+    if recognizer_config.regions:
+        data["regions"] = recognizer_config.regions  # requests handles list → repeated keys
+
     if camera_name or frigate_event_id:
         camera_id = f"{camera_name} ({frigate_event_id})" if camera_name and frigate_event_id else (camera_name or frigate_event_id)
         data["camera_id"] = camera_id

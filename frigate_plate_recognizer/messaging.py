@@ -46,17 +46,6 @@ def publish_discovery(client, logger) -> None:
             "unique_id": "platerecognizer_licenseplate",
             "default_entity_id": "sensor.platerecognizer_licenseplate",
         },
-        "is_watched_plate": {
-            "p": "binary_sensor",
-            "name": "License Plate",
-            "state_topic": STATE_TOPIC,
-            "value_template": "{{ value_json.is_watched_plate }}",
-            "payload_on": "True",
-            "payload_off": "False",
-            "icon": "mdi:eye-check",
-            "unique_id": "platerecognizer_licenseplate_watched",
-            "default_entity_id": "binary_sensor.platerecognizer_licenseplate",
-        },
         "plate_image": {
             "p": "image",
             "name": "License Plate",

@@ -512,6 +512,10 @@ def _process_message_inner(message) -> str:
 
         set_sublabel(frigate_url, frigate_event_id, saved_plate_number, plate_score)
 
+        # Re-fetch the cropped snapshot after plate is confirmed so the image
+        # entity always shows the exact frame that was recognised
+        confirmed_snapshot = get_snapshot(frigate_event_id, frigate_url, True) or snapshot
+
         publish_plate_message(
             mqtt_client=mqtt_client,
             config=cfg,
@@ -523,7 +527,7 @@ def _process_message_inner(message) -> str:
             watched_plate=watched_plate,
             fuzzy_score=fuzzy_score,
             logger=logger,
-            snapshot=snapshot,
+            snapshot=confirmed_snapshot,
         )
 
     if saved_plate_number or cfg["frigate"].get("always_save_snapshot", False):
