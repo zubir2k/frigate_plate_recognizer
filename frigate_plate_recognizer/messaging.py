@@ -25,13 +25,13 @@ def publish_discovery(client, logger) -> None:
     """Publish MQTT device discovery so HA auto-creates all entities."""
     device = {
         "identifiers": [DEVICE_ID],
-        "name": "platerecognizer",
+        "name": "Frigate Platerecognizer",
         "model": "frigate_plate_recognizer",
-        "manufacturer": "Frigate / zubir2k",
+        "manufacturer": "Frigate / Platerecognizer",
     }
     origin = {
         "name": "frigate_plate_recognizer",
-        "url": "https://github.com/zubir2k/frigate_plate_recognizer",
+        "url": "https://github.com/ljmerza/frigate_plate_recognizer",
     }
 
     components = {
