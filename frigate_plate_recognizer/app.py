@@ -47,7 +47,6 @@ from frigate_plate_recognizer.http_client import build_session
 from frigate_plate_recognizer.images import (
     fetch_final_attributes,
     fetch_snapshot,
-    save_cropped_snapshot,
 )
 from frigate_plate_recognizer.images import (
     save_image as save_snapshot_image,
@@ -495,16 +494,6 @@ def _process_message_inner(message) -> str:
     result = "no_plate"
     saved_plate_number = watched_plate if watched_plate else plate_number
 
-    # Save the cropped snapshot so HA can display it via image_path
-    image_path: Optional[str] = save_cropped_snapshot(
-        snapshot,
-        camera_name=camera_name or "unknown",
-        frigate_event_id=frigate_event_id,
-        snapshot_path=SNAPSHOT_PATH,
-        datetime_format=DATETIME_FORMAT,
-        logger=logger,
-    )
-
     if plate_number:
         start_time = datetime.fromtimestamp(after_data["start_time"])
         formatted_start_time = start_time.strftime("%Y-%m-%d %H:%M:%S")
@@ -534,7 +523,7 @@ def _process_message_inner(message) -> str:
             watched_plate=watched_plate,
             fuzzy_score=fuzzy_score,
             logger=logger,
-            image_path=image_path,
+            snapshot=snapshot,
         )
 
     if saved_plate_number or cfg["frigate"].get("always_save_snapshot", False):

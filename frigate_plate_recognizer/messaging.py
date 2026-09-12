@@ -14,6 +14,70 @@ from .metrics import (
     on_disconnect_counter,
 )
 
+DISCOVERY_PREFIX = "homeassistant"
+DEVICE_ID = "frigate_plate_recognizer"
+STATE_TOPIC = "frigate/plate_recognizer"
+IMAGE_TOPIC = "frigate/plate_recognizer/image"
+PLACEHOLDER_IMAGE_PATH = "/app/placeholder.jpg"  # shipped with the container
+
+
+def publish_discovery(client, logger) -> None:
+    """Publish MQTT device discovery so HA auto-creates all entities."""
+    device = {
+        "identifiers": [DEVICE_ID],
+        "name": "platerecognizer",
+        "model": "frigate_plate_recognizer",
+        "manufacturer": "Frigate / zubir2k",
+    }
+    origin = {
+        "name": "frigate_plate_recognizer",
+        "url": "https://github.com/zubir2k/frigate_plate_recognizer",
+    }
+
+    components = {
+        "plate": {
+            "p": "sensor",
+            "name": "License Plate",
+            "state_topic": STATE_TOPIC,
+            "value_template": "{{ value_json.plate_number }}",
+            "json_attributes_topic": STATE_TOPIC,
+            "json_attributes_template": "{{ value_json | tojson }}",
+            "icon": "mdi:car",
+            "unique_id": "platerecognizer_licenseplate",
+            "default_entity_id": "sensor.platerecognizer_licenseplate",
+        },
+        "is_watched_plate": {
+            "p": "binary_sensor",
+            "name": "License Plate",
+            "state_topic": STATE_TOPIC,
+            "value_template": "{{ value_json.is_watched_plate }}",
+            "payload_on": "True",
+            "payload_off": "False",
+            "icon": "mdi:eye-check",
+            "unique_id": "platerecognizer_licenseplate_watched",
+            "default_entity_id": "binary_sensor.platerecognizer_licenseplate",
+        },
+        "plate_image": {
+            "p": "image",
+            "name": "License Plate",
+            "image_topic": IMAGE_TOPIC,
+            "content_type": "image/jpeg",
+            "icon": "mdi:image",
+            "unique_id": "platerecognizer_licenseplate_image",
+            "default_entity_id": "image.platerecognizer_licenseplate",
+        },
+    }
+
+    payload = {
+        "dev": device,
+        "o": origin,
+        "cmps": components,
+    }
+
+    discovery_topic = f"{DISCOVERY_PREFIX}/device/{DEVICE_ID}/config"
+    client.publish(discovery_topic, json.dumps(payload), retain=True)
+    logger.info("Published MQTT discovery to %s", discovery_topic)
+
 
 def make_on_connect(
     logger, config: Dict[str, Any], on_connected: Optional[Callable] = None
@@ -22,6 +86,14 @@ def make_on_connect(
         on_connect_counter.inc()
         logger.info("MQTT Connected")
         client.subscribe(config["frigate"]["main_topic"] + "/events")
+        publish_discovery(client, logger)
+        # Publish placeholder so the image entity is never NULL after HA restart
+        try:
+            with open(PLACEHOLDER_IMAGE_PATH, "rb") as f:
+                client.publish(IMAGE_TOPIC, f.read(), retain=True)
+                logger.debug("Published placeholder image to %s", IMAGE_TOPIC)
+        except FileNotFoundError:
+            logger.warning("Placeholder image not found at %s", PLACEHOLDER_IMAGE_PATH)
         if on_connected:
             on_connected(True)
 
@@ -79,7 +151,7 @@ def publish_plate_message(
     watched_plate: Optional[str],
     fuzzy_score: Optional[float],
     logger,
-    image_path: Optional[str] = None,
+    snapshot: Optional[bytes] = None,
 ) -> None:
     if not config["frigate"].get("return_topic"):
         return
@@ -96,7 +168,6 @@ def publish_plate_message(
             "fuzzy_score": fuzzy_score,
             "original_plate": str(plate_number).upper(),
             "is_watched_plate": True,
-            "image_path": image_path,
         }
     else:
         message = {
@@ -106,7 +177,6 @@ def publish_plate_message(
             "camera_name": after_data["camera"],
             "start_time": formatted_start_time,
             "is_watched_plate": False,
-            "image_path": image_path,
         }
 
     logger.debug("Sending MQTT message: %s", message)
@@ -116,6 +186,11 @@ def publish_plate_message(
     topic = f"{main_topic}/{return_topic}"
 
     mqtt_client.publish(topic, json.dumps(message), retain=True)
+
+    # Publish cropped image bytes directly to the image topic for HA image entity
+    if snapshot:
+        mqtt_client.publish(IMAGE_TOPIC, snapshot, retain=True)
+        logger.debug("Published cropped image to %s", IMAGE_TOPIC)
 
 
 def create_mqtt_client(
